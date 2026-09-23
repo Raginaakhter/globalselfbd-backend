@@ -16,6 +16,7 @@ import { siteRouter } from "./routes/site.routes";
 import { contactRouter } from "./routes/contact.routes";
 import { newsletterRouter } from "./routes/newsletter.routes";
 import { getBannerImage } from "./lib/banners";
+import { prisma } from "./lib/prisma";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +83,33 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Database connectivity check. Reports only error codes and whether the connection
+// env vars look right — never the URLs themselves.
+app.get("/api/health/db", async (_req: Request, res: Response) => {
+  const describe = (name: string) => {
+    const v = process.env[name];
+    if (!v) return "missing";
+    if (/^["']/.test(v)) return "has surrounding quotes — remove them";
+    if (!/^postgres(ql)?:\/\//.test(v)) return "does not start with postgresql://";
+    return "ok";
+  };
+  const env = { DATABASE_URL: describe("DATABASE_URL"), DIRECT_URL: describe("DIRECT_URL") };
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const products = await prisma.product.count();
+    return res.status(200).json({ database: "ok", products, env });
+  } catch (error) {
+    const err = error as { name?: string; errorCode?: string; code?: string; message?: string };
+    // First meaningful line of Prisma's message, with any connection string stripped out.
+    const reason = (err.message || "")
+      .split("\n")
+      .find((l) => l.trim() && !l.startsWith("Invalid `"))
+      ?.trim()
+      .replace(/postgres(ql)?:\/\/[^\s`]*@[^\s`]*/g, "<url>");
+    return res.status(503).json({ database: "error", name: err.name, code: err.errorCode || err.code, reason, env });
+  }
 });
 
 // API Routes
