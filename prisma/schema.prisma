@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled connection, used by the app
+  directUrl = env("DIRECT_URL")   // direct connection, used by prisma migrate
 }
 
 model User {
@@ -194,4 +195,13 @@ model WishlistItem {
 
   @@unique([userId, productId])
   @@index([userId])
+}
+
+// Admin-uploaded images (homepage banners). Kept in the database rather than on disk
+// because hosts like Render wipe the local filesystem on every deploy.
+model UploadedImage {
+  name      String   @id // file name used in the URL, e.g. "1790147151695-e46b8055e2809e78.png"
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
 }

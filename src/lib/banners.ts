@@ -1,19 +1,20 @@
-import { promises as fs } from "fs";
-import path from "path";
 import crypto from "crypto";
 import { prisma } from "./prisma";
 import type { HeroSlide } from "./site-types";
 
-// Uploaded files live on disk and are served by express.static at /uploads.
-export const UPLOADS_DIR = path.join(process.cwd(), "uploads");
-const BANNERS_DIR = path.join(UPLOADS_DIR, "banners");
-
 export const MAX_BANNER_BYTES = 5 * 1024 * 1024;
-// Orphaned files are only removed once they are this old, so an image that was
+// Orphaned images are only removed once they are this old, so an image that was
 // just uploaded but not yet saved into the banner list is never deleted.
 const ORPHAN_GRACE_MS = 60 * 60 * 1000;
 
 export type Banner = { image: string; href: string; alt: string };
+
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
 
 // Detect the real type from the file's magic bytes instead of trusting the client.
 function detectImageExt(buf: Buffer): string | null {
@@ -24,7 +25,7 @@ function detectImageExt(buf: Buffer): string | null {
   return null;
 }
 
-/** Saves a base64 image (raw or data URL). Returns the public path, e.g. "/uploads/banners/abc.jpg". */
+/** Saves a base64 image (raw or data URL) to the database. Returns its public path, e.g. "/uploads/banners/abc.jpg". */
 export async function saveBannerImage(base64: string): Promise<string> {
   const raw = base64.replace(/^data:[^;]+;base64,/, "");
   const buf = Buffer.from(raw, "base64");
@@ -34,10 +35,13 @@ export async function saveBannerImage(base64: string): Promise<string> {
   const ext = detectImageExt(buf);
   if (!ext) throw new Error("Only JPG, PNG, WEBP or GIF images are allowed");
 
-  await fs.mkdir(BANNERS_DIR, { recursive: true });
   const name = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
-  await fs.writeFile(path.join(BANNERS_DIR, name), buf);
+  await prisma.uploadedImage.create({ data: { name, mimeType: MIME_BY_EXT[ext], data: buf } });
   return `/uploads/banners/${name}`;
+}
+
+export async function getBannerImage(name: string) {
+  return prisma.uploadedImage.findUnique({ where: { name } });
 }
 
 export async function getBanners(): Promise<Banner[]> {
@@ -75,24 +79,17 @@ export async function saveBanners(banners: Banner[]): Promise<void> {
     create: { key: "heroSlides", value },
   });
 
-  await removeOrphanedBannerFiles(banners.map((b) => b.image)).catch((err) =>
+  await removeOrphanedBannerImages(banners.map((b) => b.image)).catch((err) =>
     console.error("Banner cleanup failed:", err)
   );
 }
 
-async function removeOrphanedBannerFiles(inUse: string[]): Promise<void> {
-  const used = new Set(inUse.map((url) => path.basename(url)));
-  let files: string[];
-  try {
-    files = await fs.readdir(BANNERS_DIR);
-  } catch {
-    return;
-  }
-  const now = Date.now();
-  for (const file of files) {
-    if (used.has(file)) continue;
-    const full = path.join(BANNERS_DIR, file);
-    const stat = await fs.stat(full);
-    if (now - stat.mtimeMs > ORPHAN_GRACE_MS) await fs.unlink(full);
-  }
+async function removeOrphanedBannerImages(inUse: string[]): Promise<void> {
+  const used = inUse.map((url) => url.split("/").pop() || "");
+  await prisma.uploadedImage.deleteMany({
+    where: {
+      name: { notIn: used },
+      createdAt: { lt: new Date(Date.now() - ORPHAN_GRACE_MS) },
+    },
+  });
 }

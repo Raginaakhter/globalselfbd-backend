@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "Global Shelf BD - Node.js Express TypeScript Backend API Server",
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
+    "build": "prisma generate && tsc",
+    "start": "node dist/src/server.js",
     "postinstall": "prisma generate",
-    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"
   },
@@ -36,5 +37,8 @@
     "@types/nodemailer": "^6.4.17",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

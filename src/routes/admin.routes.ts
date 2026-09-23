@@ -29,10 +29,10 @@ adminRouter.get("/orders", async (req: AuthenticatedRequest, res: Response) => {
     }
     if (q) {
       where.OR = [
-        { id: { contains: q } },
-        { customerName: { contains: q } },
-        { customerEmail: { contains: q } },
-        { customerPhone: { contains: q } },
+        { id: { contains: q, mode: "insensitive" } },
+        { customerName: { contains: q, mode: "insensitive" } },
+        { customerEmail: { contains: q, mode: "insensitive" } },
+        { customerPhone: { contains: q, mode: "insensitive" } },
       ];
     }
 

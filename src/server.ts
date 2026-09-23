@@ -15,7 +15,7 @@ import { wishlistRouter } from "./routes/wishlist.routes";
 import { siteRouter } from "./routes/site.routes";
 import { contactRouter } from "./routes/contact.routes";
 import { newsletterRouter } from "./routes/newsletter.routes";
-import { UPLOADS_DIR } from "./lib/banners";
+import { getBannerImage } from "./lib/banners";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -52,18 +52,20 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// Admin-uploaded images (file names are random, so they can be cached for long)
-app.use(
-  "/uploads",
-  express.static(UPLOADS_DIR, {
-    maxAge: "30d",
-    immutable: true,
-    setHeaders: (res) => {
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    },
-  })
-);
+// Admin-uploaded images, stored in the database (file names are random, so they can be cached for long)
+app.get("/uploads/banners/:name", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const image = await getBannerImage(req.params.name as string);
+    if (!image) return res.status(404).end();
+    res.setHeader("Content-Type", image.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    return res.send(Buffer.from(image.data));
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // Root
 app.get("/", (_req: Request, res: Response) => {

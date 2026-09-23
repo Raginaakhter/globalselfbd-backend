@@ -6,7 +6,7 @@ Standalone Node.js + Express + TypeScript + Prisma backend server for Global She
 
 ```
 backend/
-├── prisma/               # Database schema, SQLite database & seeds
+├── prisma/               # Database schema, migrations & seeds
 │   ├── schema.prisma
 │   ├── seed.ts
 │   └── seed-site.ts
@@ -35,10 +35,12 @@ cp .env.example .env
 ```
 
 ### 3. Initialize & Seed Database
+Set `DATABASE_URL` and `DIRECT_URL` in `.env` to your PostgreSQL database, then:
 ```bash
-npx prisma db push
-npm run db:seed
+npm run db:migrate   # apply migrations (prisma migrate deploy)
+npm run db:seed      # only for a new, empty database
 ```
+To change the schema: edit `prisma/schema.prisma`, then run `npm run db:migrate:dev -- --name <change>`.
 
 ### 4. Run Development Server
 ```bash
@@ -51,6 +53,15 @@ The server will start on `http://localhost:5000`.
 npm run build
 npm start
 ```
+
+## ☁️ Deploy to Render
+
+1. Push this repo to GitHub.
+2. In Render: **New → Blueprint**, pick the repo. It reads [`render.yaml`](render.yaml).
+3. Fill in the env vars marked `sync: false` (`DATABASE_URL`, `DIRECT_URL`, `FRONTEND_URL`, `PUBLIC_API_URL`, Google, email, admin).
+4. Each deploy runs `npm run build` and `npm run db:migrate`, then `npm start`. Health check: `/api/health`.
+
+Banner images are stored in the database, so they survive redeploys.
 
 ## 📡 API Endpoints
 
